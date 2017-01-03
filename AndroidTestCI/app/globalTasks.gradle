@@ -1,0 +1,49 @@
+apply from: 'utils.gradle'
+apply from: 'taskHelper.gradle'
+
+ext {
+    getGrantAppPermissionsFromFileTask = this.&getGrantAppPermissionsFromFileTask
+    getGrantHCFSFileSystemPermTask = this.&getGrantHCFSFileSystemPermTask
+    getGrantSmartCacheMTPFileSystemPermTask = this.&getGrantSmartCacheMTPFileSystemPermTask
+    getGenTestReportTask = this.&getGenTestReportTask
+}
+
+def getGrantAppPermissionsFromFileTask(taskNameSpace, device, applicationId, permissionConfFile) {
+    def forDeviceDo = {
+        new File(permissionConfFile).eachLine { permission ->
+            grantPermission(device, applicationId, permission)
+        }
+    }
+    return getForDeviceDoTask("${taskNameSpace}grantAppPermissionsFromFileTask", device, forDeviceDo)
+}
+
+def getGrantHCFSFileSystemPermTask(taskNameSpace, device) {
+    def forDeviceDo = {
+        chmod(device, "o+rx -R", "/data/hcfs")
+    }
+    return getForDeviceDoTask("${taskNameSpace}grantHCFSFileSystemPermTask", device, forDeviceDo)
+}
+
+def getGrantSmartCacheMTPFileSystemPermTask(taskNameSpace, device) {
+    def forDeviceDo = {
+        chmod(device, "o+rx -R", "/data/mnt")
+    }
+    return getForDeviceDoTask("${taskNameSpace}grantSmartCacheMTPFileSystemPermTask", device, forDeviceDo)
+}
+
+def getGenTestReportTask(taskNameSpace) {
+    return tasks.create("${taskNameSpace}genTestReportTask") << {
+        println "ant generate test report"
+        def xmlsDir = "${PROJ_DIR}/../../reports"
+        def reportStyleDir = "${PROJ_DIR}/../../junit-style"
+        ant.taskdef(
+                name: 'junitreport',
+                classname: 'org.apache.tools.ant.taskdefs.optional.junit.XMLResultAggregator',
+                classpath: configurations.compile.asPath
+        )
+        ant.junitreport(todir : xmlsDir) {
+            fileset(dir: xmlsDir, includes: '*.xml')
+            report(styledir : reportStyleDir, format : "noframes", todir : xmlsDir)
+        }
+    }
+}

@@ -1,0 +1,132 @@
+ext {
+    setenforce = this.&setenforce
+    chmod = this.&chmod
+    chcon = this.&chcon
+    chown = this.&chown
+    getFolderOwner = this.&getFolderOwner
+    getFolderGroup = this.&getFolderGroup
+    getFolderContext = this.&getFolderContext
+    isFileExists = this.&isFileExists
+    isAppInstalled = this.&isAppInstalled
+    grantPermission = this.&grantPermission
+    waitAdbAvailable = this.&waitAdbAvailable
+    waitDeviceBootOK = this.&waitDeviceBootOK
+    adbShell = this.&adbShell
+    adb = this.&adb
+
+    wget = this.&wget
+}
+
+def setenforce(device, enable) {
+    def cmd = "su 0 setenforce ${enable}"
+    println "${cmd}..."
+    adbShell(device, cmd)
+}
+
+def chmod(device, arg, file) {
+    def cmd = "su 0 chmod ${arg} ${file}"
+    println "${cmd}..."
+    adbShell(device, cmd)
+}
+
+def chcon(device, context, arg, file) {
+    def cmd = "su 0 chcon ${context} ${arg} ${file}"
+    println "${cmd}..."
+    adbShell(device, cmd)
+}
+
+def chown(device, owner, group, arg, file) {
+    def cmd = "su 0 chown ${owner}:${group} ${arg} ${file}"
+    println "${cmd}..."
+    adbShell(device, cmd)
+}
+
+def getFolderOwner(device, folder) {
+    def cmd = "su 0 ls -ld ${folder} | tr -s \" \" | cut -f 2 -d ' ' | tr -d '\\n'"
+    def owner = adbShell(device, cmd)
+    if (owner.isEmpty())
+        throw new RuntimeException('Fail to get owner(get empty)')
+    return owner
+}
+
+def getFolderGroup(device, folder) {
+    def cmd = "su 0 ls -ld ${folder} | tr -s \" \" | cut -f 3 -d ' ' | tr -d '\\n'"
+    def group = adbShell(device, cmd)
+    if (group.isEmpty())
+        throw new RuntimeException('Fail to get group(get empty)')
+    return group
+}
+
+def getFolderContext(device, folder) {
+    def cmd = "su 0 ls -ldZ ${folder} | tr -s \" \" | cut -f 4 -d ' ' | tr -d '\\n'"
+    def context = adbShell(device, cmd)
+    if (context.isEmpty())
+        throw new RuntimeException('Fail to get context(get empty)')
+    return context
+}
+
+def isFileExists(device, file) {
+    def lsFile = adbShell(device, "ls /storage/emulated/0/DCIM | grep ${file}")
+    return !lsFile.isEmpty()
+}
+
+def isAppInstalled(device, apk) {
+    def lsApks = adbShell(device, "pm list packages | grep ${apk}")
+    return !lsApks.isEmpty()
+}
+
+def grantPermission(device, pkg, permission) {
+    return adbShell(device, "pm grant ${pkg} ${permission}")
+}
+
+def waitAdbAvailable(device, timeoutSec) {
+    def isAdbAvailable = false
+    while (!isAdbAvailable && timeoutSec-- > 0) {
+        adb("devices").eachLine {
+            if (it.endsWith("device")) {
+                //You can specify device here
+                def serialNum = it.split()[0]
+                if (serialNum.equals(device))
+                    isAdbAvailable = true
+            }
+        }
+        sleep(1 * 1000)
+    }
+    if(!isAdbAvailable)
+        throw new RuntimeException("Timeout to wait adb available")
+}
+
+def waitDeviceBootOK(device, timeoutSec) {
+    def isAdbAvailable = false
+    while (!isAdbAvailable && timeoutSec-- > 0) {
+        if ("1".equals(adbShell(device, "getprop sys.boot_completed").trim()))
+            isAdbAvailable = true
+        sleep(1 * 1000)
+    }
+    if(!isAdbAvailable)
+        throw new RuntimeException("Timeout to wait device boot complete")
+}
+
+def adbShell(device, cmd) {
+    return adb(device, "shell ${cmd}")
+}
+
+def adb(device, cmd) {
+    def adb = android.getAdbExe().toString()
+    def fullCmd = "${adb} -s ${device} ${cmd}"
+    println "<${fullCmd}>"
+    return fullCmd.execute().text.trim()
+}
+
+def adb(cmd) {
+    def adb = android.getAdbExe().toString()
+    def fullCmd = "${adb} ${cmd}"
+    println "<${fullCmd}>"
+    return fullCmd.execute().text.trim()
+}
+
+def wget(url) {
+    def cmd = "wget -N ${url}"
+    println "${cmd}..."
+    println cmd.execute().text
+}

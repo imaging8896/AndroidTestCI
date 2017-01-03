@@ -1,0 +1,102 @@
+apply plugin: 'com.android.application'
+apply from: 'apiInterfTest.gradle'
+apply from: 'apiBehaviourTest.gradle'
+apply from: 'boostTest.gradle'
+apply from: 'utilsUnitTest.gradle'
+
+android {
+    compileSdkVersion 23
+    buildToolsVersion '23.0.3'
+    useLibrary 'org.apache.http.legacy'
+
+    defaultConfig {
+        applicationId "hcfs.test.testsuite"
+        minSdkVersion 23
+        targetSdkVersion 23
+        versionCode 1
+        versionName "1.0.0046"
+        testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+//        testInstrumentationRunner "hcfs.test.runner.JUnitResultAndroidTestRunner"
+    }
+
+    signingConfigs {
+        release {
+            storeFile file("../HCFSTest.jks")
+            storePassword "54323013"
+            keyAlias "HCFSTest"
+            keyPassword "54323013"
+        }
+
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+//            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
+        }
+    }
+
+    project.ext {
+        //Remote test apks URL
+        REMOTE_APKS_URL = "ftp://172.16.10.200/ubuntu/CloudDataSolution/TeraFonn_Test_Automation/testdata/apk"
+
+        MGMT_APP_DIR = "/data/data/com.hopebaytech.hcfsmgmt"
+        MGMT_APP_DB_DIR = "${MGMT_APP_DIR}/databases"
+        SMART_CACHE_DIR = "/data/smartcache"
+
+        TEST_CONFIG = "${project.projectDir}/../../test_conf"
+        TEST_APPS_FILE = "${TEST_CONFIG}/testApps"
+        TEST_PERM_FILE = "${TEST_CONFIG}/testPermissions"
+
+        PROJ_DIR = project.projectDir
+        PROJ_BUILD_DIR = project.buildDir
+    }
+
+    project.task("copyResultTask", type: Copy) {
+        from { "${project.buildDir}/report/" }
+        into { "${project.projectDir}/../../reports" }
+    }
+    def device = "00f28ec4cb50a4f2"
+    if (project.hasProperty('specifyDevice')) {
+        device = specifyDevice
+    }
+    println "Test on device ${device}"
+
+    android.applicationVariants.all { variant ->
+        def variantName = variant.name.capitalize()
+        def pkg = variant.applicationId
+        if (variantName == "Debug") {
+            generateApiInterfTestTask("apiInterfTest", variantName, pkg, device)
+            generateApiBehaviourTestTask("apiBehaviourTest", variantName, pkg, device)
+            generateBoostTestTask("boostTest", variantName, pkg, device)
+            generateUtilsUnitTestTask("utilsUnitTest", variantName, pkg, device)
+        }
+    }
+
+    lintOptions {
+        abortOnError false
+    }
+
+    sourceSets {
+        String androidTestDir = 'src/androidTest/java'
+        //Let unit test test androidTest code
+        test {
+            java.srcDir androidTestDir
+        }
+        androidTest {
+            java.srcDir androidTestDir
+        }
+    }
+}
+
+dependencies {
+    compile 'com.android.support.test:runner:0.5'
+    compile 'com.android.support.test:rules:0.5'
+    compile 'junit:junit:4.12'
+    compile 'org.apache.ant:ant-junit:1.9.7'
+    compile fileTree(dir: 'libs', include: ['*.jar'])
+
+    testCompile 'org.json:json:20090211'
+}

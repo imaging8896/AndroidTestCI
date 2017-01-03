@@ -1,0 +1,75 @@
+apply from: 'utils.gradle'
+apply from: 'taskHelper.gradle'
+apply from: 'globalTasks.gradle'
+
+ext {
+    generateBoostTestTask = this.&generateBoostTestTask
+}
+
+def generateBoostTestTask(taskNameSpace, variantName, pkg, device) {
+    def testTask = tasks.create(taskNameSpace) << {
+        println adbShell(device, "am instrument -w -e package hcfs.test.testsuite.api.boost hcfs.test.testsuite.test/android.support.test.runner.AndroidJUnitRunner")
+        adb(device, "pull /sdcard/report ${PROJ_BUILD_DIR}")
+    }
+    def installTask = tasks.findByName("install${variantName}")
+    def uninstallAllTask = tasks.findByName("uninstallAll")
+    def installAndroidTestTask = tasks.findByName("install${variantName}AndroidTest")
+    def grantHCFSFileSystemPermTask = getGrantHCFSFileSystemPermTask(taskNameSpace, device)
+    def grantPermissionTask = getGrantAppPermissionsFromFileTask(taskNameSpace, device, pkg, TEST_PERM_FILE)
+    def genTestReportTask = getGenTestReportTask(taskNameSpace)
+    def setupTask = getSetupTask(taskNameSpace, device, setup(device, pkg))
+    def teardownTask = getTeardownTask(taskNameSpace, device, teardown(device))
+    def copyResultTask = tasks.findByName("copyResultTask")
+
+    grantPermissionTask.dependsOn installTask, installAndroidTestTask
+    setupTask.dependsOn installTask, installAndroidTestTask
+    testTask.dependsOn grantPermissionTask, setupTask, grantHCFSFileSystemPermTask
+    testTask.finalizedBy teardownTask, copyResultTask, uninstallAllTask
+    copyResultTask.finalizedBy genTestReportTask
+}
+
+def setup(device, pkg) {
+    return  {
+        def junitTestAppDir = "/data/data/${pkg}"
+//        def link2MgmtAppDB = "/tmp/databases"
+
+        def junitTestAppContext = getFolderContext(device, junitTestAppDir)
+        def junitTestAppUid = getFolderOwner(device, junitTestAppDir)
+        def sdcardGid = getFolderGroup(device, "/sdcard")
+        println "sdcard_rw group=${sdcardGid}, junit test app context=${junitTestAppContext}, junit test app uid=${junitTestAppUid}"
+
+        downloadTestAppApks(TEST_APPS_FILE, REMOTE_APKS_URL)
+        pushTestAppApks(device, TEST_APPS_FILE)
+        installTestApps(device, TEST_APPS_FILE)
+        setenforce(device, 0)
+
+//        println "Change access right for smartcache to let test can read file info..."
+//        adbShell(device, "su 0 chmod o+x -R ${SMART_CACHE_DIR}")
+
+        println "Change management app db access right for test."
+//        println "Create link to management app db folder..."
+//        adbShell(device, "su 0 ln -s ${mgmtAppDir} ${link2MgmtAppDB}")
+
+        chown(device, junitTestAppUid, sdcardGid, "-R", MGMT_APP_DB_DIR)
+        chcon(device, junitTestAppContext, "-R", MGMT_APP_DB_DIR)
+    }
+}
+
+def teardown(device) {
+    return  {
+        def mgmtContext = getFolderContext(device, MGMT_APP_DIR)
+        def mgmtAppUid = getFolderOwner(device, MGMT_APP_DIR)
+        println "mgmt app uid=${mgmtAppUid}, mgmt app context=${mgmtContext}"
+
+        println "Restore management app database permission setting."
+        println "Restore owner and group to '${mgmtAppUid}'..."
+        chown(device, mgmtAppUid, mgmtAppUid, "-R", MGMT_APP_DB_DIR)
+        println "Restore context to '${mgmtContext}'..."
+        chcon(device, mgmtContext, "-R", MGMT_APP_DB_DIR)
+
+        setenforce(device, 1)
+        adbShell(device, "su 0 svc power reboot")
+        waitAdbAvailable(device, 120)
+        waitDeviceBootOK(device, 240)
+    }
+}

@@ -1,0 +1,71 @@
+apply from: 'utils.gradle'
+
+ext {
+    getForDeviceDoTask = this.&getForDeviceDoTask
+    getSetupTask = this.&getSetupTask
+    getTeardownTask= this.&getTeardownTask
+
+    downloadTestAppApks = this.&downloadTestAppApks
+    installTestApps = this.&installTestApps
+    pushTestAppApks = this.&pushTestAppApks
+}
+
+def getForDeviceDoTask(taskName, targetDevice, func) {
+    return tasks.create(taskName) << {
+        adb("devices").eachLine {
+            if (it.endsWith("device")) {
+                //You can specify device here
+                def device = it.split()[0]
+                if (device.equals(targetDevice))
+                    return func()
+            }
+        }
+    }
+}
+
+def getSetupTask(taskNameSpace, device, Closure forDeviceDo) {
+    return getForDeviceDoTask("${taskNameSpace}SetupTask", device, forDeviceDo)
+}
+
+def getTeardownTask(taskNameSpace, device, Closure forDeviceDo) {
+    return getForDeviceDoTask("${taskNameSpace}TeardownTask", device, forDeviceDo)
+}
+
+def downloadTestAppApks(testAppsFile, remoteApksDir) {
+    println "Download test app apks to local..."
+    new File(testAppsFile).eachLine { line ->
+        if (!line.trim().startsWith("#")) {
+            def (apk, _) = line.tokenize(':')
+            wget("${remoteApksDir}/${apk}")
+        }
+    }
+}
+
+def installTestApps(device, testAppsFile) {
+    println "Install test apps from local apks..."
+    def isInstallingApp = false
+    new File(testAppsFile).eachLine { line ->
+        if (!line.trim().startsWith("#")) {
+            def (apk, pkg) = line.tokenize(':')
+            if (!isAppInstalled(device, pkg)) {
+                adb(device, "install ${apk}")
+                isInstallingApp = true
+            }
+        }
+    }
+    if(isInstallingApp)
+        sleep(60 * 1000)
+}
+
+def pushTestAppApks(device, testAppsFile) {
+    println "Push test app local apks..."
+    new File(testAppsFile).eachLine { line ->
+        if (!line.trim().startsWith("#")) {
+            def (apk, _) = line.tokenize(':')
+            if (!isFileExists(device, apk)) {
+                // For junit test app to get test app package
+                adb(device, "push ${apk} /storage/emulated/0/DCIM/${apk}")
+            }
+        }
+    }
+}
