@@ -3,9 +3,9 @@ HCFS API test
 
 ## Intro:
 * The API test is divided into 3 parts.
-    1. behaviour -> test with API behaviour
-    2. boost -> boost API (because its test will disconnect Tera app db from Tera app, there has lots of problem)
-    3. interface -> API interface test
+    1. src/androidTest/java/hcfs/test/testsuite/api/behaviour -> test with API behaviour
+    2. src/androidTest/java/hcfs/test/testsuite/api/boost -> boost API (because its test will disconnect Tera app db from Tera app, there has lots of problem)
+    3. src/androidTest/java/hcfs/test/testsuite/api/interface -> API interface test
     
 * The tests can be automatically executed via gradle script(there are also shell and python startup scripts).
 
